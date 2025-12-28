@@ -1,4 +1,4 @@
-# k8s-homelab-blueprint
+# k8s Homelab Blueprint
 
 Portable, secret-free blueprint of a homelab Kubernetes stack. It captures networking, storage, and workloads so you can share the architecture publicly or fork it as a starting point.
 
