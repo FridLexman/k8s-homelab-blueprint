@@ -1,0 +1,39 @@
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: shared-rwx-pv
+spec:
+  capacity:
+    storage: 100Gi
+  accessModes:
+    - ReadWriteMany
+  storageClassName: nfs-storage
+  persistentVolumeReclaimPolicy: Retain
+  mountOptions:
+    - vers=4.2
+    - rsize=1048576
+    - wsize=1048576
+    - noatime
+    - nodiratime
+    - hard
+    - timeo=600
+    - retrans=2
+  nfs:
+    server: 192.168.1.20            # CHANGE_ME_NFS_SERVER
+    path: /mnt/k3sFast/csgo         # CHANGE_ME_NFS_PATH
+    readOnly: false
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: shared-rwx-pvc
+  namespace: cs2        # reuse this claim across namespaces with unique names if needed
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 100Gi
+  storageClassName: nfs-storage
+  volumeName: shared-rwx-pv

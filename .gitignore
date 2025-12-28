@@ -1,0 +1,8 @@
+# Secrets and local state
+*.crt
+*.key
+*.pem
+*.pfx
+*.kubeconfig
+.DS_Store
+*.log

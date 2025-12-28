@@ -1,0 +1,83 @@
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mail-secrets
+  namespace: mail
+type: Opaque
+stringData:
+  MAIL_DOMAIN: "mail.example.com"   # CHANGE_ME
+  MAIL_USER: "admin@mail.example.com"    # CHANGE_ME
+  MAIL_PASS: "CHANGE_ME"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mail-server
+  namespace: mail
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mail-server
+  template:
+    metadata:
+      labels:
+        app: mail-server
+    spec:
+      containers:
+        - name: mailserver
+          image: analogic/poste.io:latest
+          env:
+            - name: HOSTNAME
+              valueFrom:
+                secretKeyRef:
+                  name: mail-secrets
+                  key: MAIL_DOMAIN
+            - name: HTTPS
+              value: "OFF"
+          ports:
+            - containerPort: 25
+            - containerPort: 587
+            - containerPort: 993
+          volumeMounts:
+            - name: mail-data
+              mountPath: /data
+      volumes:
+        - name: mail-data
+          persistentVolumeClaim:
+            claimName: mail-pvc
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mail-pvc
+  namespace: mail
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: nfs-storage
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mail-server
+  namespace: mail
+spec:
+  selector:
+    app: mail-server
+  ports:
+    - name: smtp
+      port: 25
+      targetPort: 25
+    - name: submission
+      port: 587
+      targetPort: 587
+    - name: imaps
+      port: 993
+      targetPort: 993

@@ -1,0 +1,156 @@
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: gitlab-secrets
+  namespace: devops
+type: Opaque
+stringData:
+  GITLAB_ROOT_PASSWORD: "CHANGE_ME"
+  GITLAB_ROOT_EMAIL: "admin@example.com"
+  EXTERNAL_URL: "https://gitlab.example.com"
+  POSTGRES_PASSWORD: "CHANGE_ME_DB"
+  REDIS_PASSWORD: "CHANGE_ME_REDIS"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gitlab
+  namespace: devops
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gitlab
+  template:
+    metadata:
+      labels:
+        app: gitlab
+    spec:
+      containers:
+        - name: gitlab
+          image: gitlab/gitlab-ce:latest
+          env:
+            - name: GITLAB_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: gitlab-secrets
+                  key: GITLAB_ROOT_PASSWORD
+            - name: GITLAB_ROOT_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: gitlab-secrets
+                  key: GITLAB_ROOT_EMAIL
+            - name: EXTERNAL_URL
+              valueFrom:
+                secretKeyRef:
+                  name: gitlab-secrets
+                  key: EXTERNAL_URL
+            - name: GITLAB_OMNIBUS_CONFIG
+              value: |
+                external_url ENV['EXTERNAL_URL']
+                gitlab_rails['db_host'] = "CHANGE_ME_PG_HOST"
+                gitlab_rails['db_password'] = ENV['POSTGRES_PASSWORD']
+                gitlab_rails['redis_host'] = "CHANGE_ME_REDIS_HOST"
+                gitlab_rails['redis_password'] = ENV['REDIS_PASSWORD']
+          ports:
+            - containerPort: 80
+            - containerPort: 443
+          volumeMounts:
+            - name: gitlab-config
+              mountPath: /etc/gitlab
+            - name: gitlab-data
+              mountPath: /var/opt/gitlab
+            - name: gitlab-logs
+              mountPath: /var/log/gitlab
+      volumes:
+        - name: gitlab-config
+          persistentVolumeClaim:
+            claimName: gitlab-config-pvc
+        - name: gitlab-data
+          persistentVolumeClaim:
+            claimName: gitlab-data-pvc
+        - name: gitlab-logs
+          persistentVolumeClaim:
+            claimName: gitlab-logs-pvc
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gitlab-config-pvc
+  namespace: devops
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: nfs-storage
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gitlab-data-pvc
+  namespace: devops
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: nfs-storage
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gitlab-logs-pvc
+  namespace: devops
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: nfs-storage
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gitlab
+  namespace: devops
+spec:
+  selector:
+    app: gitlab
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+    - name: https
+      port: 443
+      targetPort: 443
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gitlab
+  namespace: devops
+  annotations:
+    kubernetes.io/ingress.class: traefik
+spec:
+  tls:
+    - hosts:
+        - gitlab.example.com   # CHANGE_ME
+      secretName: gitlab-tls   # CHANGE_ME
+  rules:
+    - host: gitlab.example.com # CHANGE_ME
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gitlab
+                port:
+                  number: 80

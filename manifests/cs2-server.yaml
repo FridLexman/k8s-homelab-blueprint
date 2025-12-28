@@ -1,0 +1,137 @@
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: cs2-secrets
+  namespace: cs2
+type: Opaque
+stringData:
+  SRCDS_TOKEN: "CHANGE_ME_STEAM_GSLT"
+  SRCDS_RCONPW: "CHANGE_ME_RCON"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cs2
+  namespace: cs2
+  labels:
+    app: cs2
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cs2
+  template:
+    metadata:
+      labels:
+        app: cs2
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: lapstack2   # CHANGE_ME or remove
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+      containers:
+        - name: cs2-server
+          image: joedwards32/cs2:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: SRCDS_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: cs2-secrets
+                  key: SRCDS_TOKEN
+            - name: CS2_SERVERNAME
+              value: "JD Surf CS2"
+            - name: CS2_PORT
+              value: "27015"
+            - name: CS2_RCONPW
+              valueFrom:
+                secretKeyRef:
+                  name: cs2-secrets
+                  key: SRCDS_RCONPW
+            - name: CS2_LAN
+              value: "0"
+            - name: CS2_MAXPLAYERS
+              value: "16"
+            - name: CS2_STARTMAP
+              value: "de_inferno"           # swap to workshop/<id> if desired
+            - name: CS2_MAPGROUP
+              value: "mg_active"
+            - name: CS2_GAMEALIAS
+              value: "custom"
+            - name: CS2_ADDITIONAL_ARGS
+              value: "-tickrate 128"
+            - name: TV_ENABLE
+              value: "1"
+            - name: TV_PORT
+              value: "27020"
+          ports:
+            - containerPort: 27015
+              name: game-udp
+              protocol: UDP
+            - containerPort: 27015
+              name: game-tcp
+              protocol: TCP
+            - containerPort: 27020
+              name: tv-udp
+              protocol: UDP
+            - containerPort: 27020
+              name: tv-tcp
+              protocol: TCP
+            - containerPort: 27005
+              name: client-udp
+              protocol: UDP
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "2"
+              memory: "2Gi"
+          volumeMounts:
+            - name: cs2-storage
+              mountPath: /home/steam/cs2-dedicated
+      volumes:
+        - name: cs2-storage
+          persistentVolumeClaim:
+            claimName: shared-rwx-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cs2-service
+  namespace: cs2
+  annotations:
+    metallb.universe.tf/address-pool: default-pool
+spec:
+  selector:
+    app: cs2
+  type: LoadBalancer
+  loadBalancerIP: 192.168.1.70          # CHANGE_ME_METALLB_IP
+  externalTrafficPolicy: Cluster
+  ports:
+    - name: game-udp
+      port: 27015
+      targetPort: 27015
+      protocol: UDP
+    - name: game-tcp
+      port: 27015
+      targetPort: 27015
+      protocol: TCP
+    - name: tv-udp
+      port: 27020
+      targetPort: 27020
+      protocol: UDP
+    - name: tv-tcp
+      port: 27020
+      targetPort: 27020
+      protocol: TCP
+    - name: client-udp
+      port: 27005
+      targetPort: 27005
+      protocol: UDP
